@@ -1,0 +1,151 @@
+<project name="HelloWorld" basedir="." default="main">
+	
+	<property name="findbugs.home" value="/usr/local/share/findbugs-2.0.0" />
+	<path id="findbugs_jar">
+		<pathelement path="${findbugs.home}/lib/findbugs-ant.jar">
+		</pathelement>
+	</path>
+	<taskdef name="findbugs" classname="edu.umd.cs.findbugs.anttask.FindBugsTask" classpathref="findbugs_jar">
+	</taskdef>	
+	
+    <property name="src.dir"     value="SRC"/>
+
+    <property name="build.dir"   value="BUILD"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="jar.dir"     value="${build.dir}/jar"/>
+
+    <property name="main-class"  value="HelloWorld"/>
+	<property name="classPathStart" value="/usr/share/tomcat6/lib"/>
+	
+	<property environment="env" />
+	<property name="build_parameter"  value="${env.BUILD_NUMBER}"/>
+	
+	<path id="3rd-party-classpath">
+		<fileset dir="${classPathStart}">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+	
+	<path id="classpath.junittest">
+		<pathelement location="${build.dir}/classes"/>
+	</path>
+	
+    <target name="clean">
+		<delete dir="${classes.dir}"/>
+		<delete dir="${jar.dir}"/>
+		<delete dir="${src.dir}"/>
+		<delete dir="${build.dir}"/>
+		<delete dir="tardir"/>
+    </target>
+
+    <target name="compile" depends="clean">
+        <mkdir dir="${classes.dir}"/>
+		<mkdir dir="${build.dir}"/>
+		<mkdir dir="${jar.dir}"/>
+		<mkdir dir="${src.dir}"/>
+		
+		<copy todir="${src.dir}">
+			<fileset dir="WEB-INF">
+				<include name="*.java"/>
+			</fileset>
+		</copy>	
+
+		<copy todir="${build.dir}">
+			<fileset dir=".">
+				<include name="*.png"/>
+				<include name="*.html"/>
+			</fileset>
+		</copy>	
+		
+        <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="3rd-party-classpath">
+			<classpath refid="3rd-party-classpath"/>
+		</javac>
+    </target>
+
+	<target name="unitTests" depends="compile">
+		<junit printsummary="on" haltonfailure="yes">
+			<formatter type="plain" usefile="false" />
+			<test name="${ant.project.name}Test"/>
+			<classpath refid="3rd-party-classpath"/>
+			<classpath refid="classpath.junittest"/>
+		</junit>
+	</target>
+	
+    <target name="jar" depends="unitTests">
+        <mkdir dir="${jar.dir}"/>
+
+		<pathconvert property="manifest.classpath" pathsep=" ">
+			<path refid="3rd-party-classpath"/>
+			<mapper>
+				<chainedmapper>
+					<flattenmapper/>
+					<globmapper from="*.jar" to="${classPathStart}/*.jar"/>
+				</chainedmapper>
+			</mapper>
+		</pathconvert>
+		
+        <jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="${main-class}"/>
+				<attribute name="Class-Path" value="${manifest.classpath}"/>
+            </manifest>
+        </jar>
+    </target>
+
+	<target name="findbugs" depends="jar">
+		<findbugs home="${findbugs.home}"
+              output="text" >
+			<auxAnalyzepath>
+				<fileset dir="${jar.dir}">
+					<include name="*/**"/>
+					<include name="*.jar"/>
+				</fileset>
+				
+				<!-- <fileset dir="${classPathStart}">
+					<include name="**/*.jar" />
+				</fileset> -->
+			</auxAnalyzepath>
+		</findbugs>
+	</target>
+  
+	<target name="tar" depends="findbugs">
+		<mkdir dir="tardir"/>
+		<mkdir dir="tardir/WEB-INF/"/>
+		<mkdir dir="tardir/WEB-INF/lib"/>
+		<mkdir dir="tardir/WEB-INF/classes"/>
+		
+		<copy todir="tardir/WEB-INF/lib">
+			<fileset dir="${jar.dir}"/>
+		</copy>
+		
+		<copy todir="tardir/WEB-INF/classes">
+			<fileset dir="${classes.dir}"/>
+		</copy>
+
+		<copy file="WEB-INF/web.xml" tofile="tardir/WEB-INF/web.xml"/>
+		
+		<copy todir="tardir/">
+			<fileset dir="${build.dir}">
+				<include name="*.png"/>
+				<include name="*.html"/>
+			</fileset>
+		</copy>
+		
+		<copy file="${ant.project.name}.spec" tofile="SPECS/${ant.project.name}.spec"/>
+		
+		<tar destfile="${build.dir}/${ant.project.name}.tar" basedir="tardir"/>	
+	</target>
+	
+	<target name="buildrpm" depends="tar" description="Package release an RPM">
+		
+		<property environment="env" />
+		<property name="build_parameter"  value="${env.BUILD_NUMBER}"/>
+
+		<rpm specFile="${ant.project.name}.spec" topDir="." command="-ba --define 'BUILD_NUMBER ${build_parameter}'" failOnError="true" />
+	</target>
+	
+    <target name="clean-build" depends="clean,jar"/>
+
+    <target name="main" depends="clean, compile, unitTests, jar, tar, buildrpm"/>
+
+</project>
