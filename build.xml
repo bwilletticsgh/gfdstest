@@ -46,7 +46,7 @@
     </target>
 	
 	<target name="seleniumTests" depends="compile">
-		<junit printsummary="on" haltonfailure="yes" timeout="120000">
+		<junit printsummary="on" haltonfailure="yes">
 			<formatter type="xml" usefile="true" />
 			<test name="LinkTest" outfile="${build.dir}/LinkTest"/>
 			<classpath refid="3rd-party-classpath"/>
